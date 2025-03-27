@@ -1,0 +1,16 @@
+---
+- name: Configure logrotate cron job (every 10 minutes between 2 AM - 4 AM)
+  hosts: all
+  tasks:
+    - name: Ensure logrotate is installed
+      ansible.builtin.package:
+        name: logrotate
+        state: present
+
+    - name: Add cron job for logrotate (runs every 10 mins between 2 AM - 4 AM)
+      ansible.builtin.cron:
+        name: "Run logrotate every 10 mins (2 AM - 4 AM)"
+        minute: "*/10"
+        hour: "2-4"
+        job: "/usr/sbin/logrotate /etc/logrotate.conf"
+        user: root

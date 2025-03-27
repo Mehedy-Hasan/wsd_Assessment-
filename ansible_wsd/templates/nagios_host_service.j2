@@ -1,0 +1,24 @@
+define host {
+    host_name       {{ inventory_hostname }}
+    address         {{ client_ip }}
+    check_command   check-host-alive
+    max_check_attempts 3
+    check_interval  5
+    retry_interval  1
+    contact_groups  admins
+    notification_interval 120
+    notification_period 24x7
+    notifications_enabled 1
+    use             generic-host
+}
+
+define service {
+    host_name               {{ inventory_hostname }}
+    service_description     NTP Service
+    check_command           check_nrpe!check_ntp
+    check_interval          10
+    retry_interval          2
+    max_check_attempts      3
+    notification_interval   60
+    use                     generic-service
+}

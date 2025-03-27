@@ -1,0 +1,101 @@
+---
+- name: Install and configure Nagios server
+  hosts: 192.168.6.61
+  vars:
+    nagios_admin_email: "admin@yourdomain.com"  # Change this
+    nagios_admin_password: "securepassword"     # Change this
+
+  tasks:
+    - name: Install Nagios core and plugins
+      ansible.builtin.apt:
+        name:
+          - nagios4
+          - nagios-plugins
+          - nagios-nrpe-plugin
+        state: present
+
+    - name: Configure Nagios web interface password
+      ansible.builtin.user:
+        name: nagiosadmin
+        password: "{{ nagios_admin_password | password_hash('sha512') }}"
+
+    - name: Ensure Nagios service is running
+      ansible.builtin.service:
+        name: nagios4
+        state: started
+        enabled: yes
+
+- name: Deploy NTP configuration and package
+  hosts: all
+  become: true  # Needed for installing packages and writing files
+
+  tasks:
+    - name: Remove conflicting time-daemon packages
+      ansible.builtin.apt:
+        name:
+          - systemd-timesyncd
+          - time-daemon
+        state: absent
+        purge: yes  # Remove config files too
+
+    - name: Install NTP package
+      ansible.builtin.apt:
+        name: ntp
+        state: present
+
+    - name: Create NTP configuration file
+      copy:
+        dest: /etc/ntpd.conf
+        content: |
+          tinker panic 0
+          restrict default kod nomodify notrap nopeer noquery
+          restrict -6 default kod nomodify notrap nopeer noquery
+          restrict 127.0.0.1
+          restrict -6 ::1
+          server 192.168.0.252 minpoll 4 maxpoll 8
+          server 192.168.0.251 minpoll 4 maxpoll 8
+          server 192.168.0.0 stratum 10
+          driftfile /var/lib/ntp/drift
+          keys /etc/ntp/keys
+      notify: Restart NTP service
+
+    - name: Ensure NTP service is enabled and running
+      service:
+        name: ntp  # Or ntpd, depending on the system
+        enabled: true
+        state: started
+
+  
+      # NRPE Configuration for Nagios monitoring
+    - name: Install NRPE agent
+      ansible.builtin.package:
+        name: nagios-nrpe-server
+        state: present
+
+    - name: Configure NRPE allowed hosts
+      ansible.builtin.lineinfile:
+        path: /etc/nagios/nrpe.cfg
+        line: "allowed_hosts=127.0.0.1,192.168.6.61"
+        regexp: "^allowed_hosts="
+        state: present
+
+    - name: Restart NRPE service
+      ansible.builtin.service:
+        name: nagios-nrpe-server
+        state: restarted
+
+    # Configure Nagios server to monitor this host
+    - name: Create Nagios host configuration on monitoring server
+      ansible.builtin.template:
+        src: nagios_host_service.j2
+        dest: /etc/nagios4/conf.d/{{ inventory_hostname }}.cfg
+      delegate_to: "192.168.6.61"
+      vars:
+        client_ip: "{{ ansible_default_ipv4.address }}"
+
+
+  handlers:
+    - name: Restart NTP service
+      service:
+        name: ntp  # Or ntpd, depending on the system
+        state: restarted

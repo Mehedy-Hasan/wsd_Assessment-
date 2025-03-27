@@ -1,0 +1,20 @@
+# Host definition for {{ inventory_hostname }}
+define host {
+    host_name       {{ inventory_hostname }}
+    address         {{ ansible_default_ipv4.address }}
+    check_command   check_ping
+    active_checks_enabled   1
+    passive_checks_enabled  1
+    use             generic-host  # Assumes you have a generic-host template
+}
+
+# NTP service check for {{ inventory_hostname }}
+define service {
+    service_description     ntp_process
+    host_name               {{ inventory_hostname }}
+    check_command           check_ntp!-H localhost -w 0.5 -c 1.0
+    check_interval          10
+    retry_interval          2
+    max_check_attempts      3
+    use                     generic-service
+}
